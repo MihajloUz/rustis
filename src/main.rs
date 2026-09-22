@@ -17,10 +17,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop{
         let (stream, _) = listener.accept().await?;
-        let buffer: String = read_buffer(stream).await?;
-        let request: Request = parse_request(&buffer).await?;
-        exec.execute(request).await?;
 
+        let buffer: String = read_buffer(stream).await?;
+
+        let request: Request = parse_request(buffer.as_str()).await?;
+
+        exec.execute(request).await?;
     }
 
     Ok(())

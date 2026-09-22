@@ -15,12 +15,12 @@ pub enum Command{
 }
 
 #[derive(Debug)]
-pub struct Request<'a>{
+pub struct Request{
     command: Command,
-    arguments: Vec<&'a str>,
+    arguments: Vec<String>,
 }
-impl<'a> Request<'a>{
-    fn new(command: Command, arguments: Vec<&'a str>) -> Self {
+impl Request{
+    fn new(command: Command, arguments: Vec<String>) -> Self {
         Self{
             command,
             arguments,
@@ -58,9 +58,9 @@ pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error:
         (Command::DELETE, value) if value < 1 => return Err("invalid command".into()),
         _ => {},
     }
+    
 
-
-    Ok(Request::new(command, arguments[1..].to_vec()))
+    Ok(Request::new(command, arguments[1..].iter().map(|arg| arg.to_string()).collect()))
 }
 
 pub async fn read_buffer(mut stream: TcpStream) -> Result<String, Box<dyn std::error::Error>>  {
@@ -70,24 +70,25 @@ pub async fn read_buffer(mut stream: TcpStream) -> Result<String, Box<dyn std::e
     Ok(data.to_string())
 }
 
-pub struct Execution<'a>{
-    cache: HashMap<&'a str, &'a str>,
+pub struct Execution{
+    cache: HashMap<String, String>,
 }
-impl<'a> Execution<'a>{
+impl Execution{
     pub fn new() -> Self{
         Self{
             cache: HashMap::new(),
         }
     }
     
-    pub async fn execute(&mut self, request: Request<'a>) -> Result<Option<&'a str>, Box<dyn std::error::Error>> {
+    pub async fn execute(&mut self, request: Request) -> Result<Option<String>, Box<dyn std::error::Error>> {
         match request.command {
             Command::SET => {
-                match self.cache.insert(request.arguments[0], request.arguments[1]){
+                match self.cache.insert(request.arguments[0].clone(), request.arguments[1].clone()){
                     Some(value) => {
                         println!("old value was replaced with: {}: {}", 
-                            request.arguments[0],
-                            request.arguments[1]);
+                            request.arguments[0].clone(),
+                            request.arguments[1].clone());
+                        println!("{:?}", self.cache);
                         Ok(None)
                     }
                     None => {
@@ -97,9 +98,9 @@ impl<'a> Execution<'a>{
                 }
             },
             Command::GET => {
-                match self.cache.get(request.arguments[0]){
+                match self.cache.get(&request.arguments[0].clone()){
                     Some(value) => {
-                        Ok(Some(value))
+                        Ok(Some(value.to_string()))
                     }
                     None => {
                         println!("no value was found");
@@ -109,7 +110,7 @@ impl<'a> Execution<'a>{
             },
             Command::DELETE => {
                 for argument in request.arguments {
-                    match self.cache.remove(argument){
+                    match self.cache.remove(&argument){
                         Some(value) => {
                             println!("removed {}", value);
                         }
