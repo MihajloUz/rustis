@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     collections::HashMap, sync::Arc,
 };
@@ -30,14 +31,18 @@ impl Request{
     }
 }
 
-pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error::Error>> {
+pub async fn parse_request(request: &str) -> Result<Request, ServerError> {
     if request.as_bytes()[0] != b'*'{
-        return Err("not a valid request".into());
+        return Err(ServerError::InvalidCommand);
     }
 
     let raw_vec: Vec<&str> = request.split("\r\n").collect();
 
-    let repetitions: usize = raw_vec[0][1..].parse()?;
+    let repetitions: usize = raw_vec[0][1..].parse().map_err(|_| ServerError::InvalidCommand)?; // remake
+                                                                                            // for
+                                                                                            // general
+                                                                                            // io
+                                                                                            // later
 
     let mut arguments: Vec<&str> = Vec::new();
 
@@ -54,13 +59,13 @@ pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error:
         _ => None,
     };
     
-    let command = command.ok_or("invalid command")?;
+    let command = command.ok_or(ServerError::InvalidCommand)?;
 
     match (&command, repetitions - 1) {
-        (Command::SET, value) if value != 2 => return Err("invalid command".into()),
-        (Command::GET, value) if value != 1 => return Err("invalid command".into()),
-        (Command::DELETE, value) if value < 1 => return Err("invalid command".into()),
-        (Command::LIST, value) if value != 0 => return Err("invalid command".into()),
+        (Command::SET, value) if value != 2 => return Err(ServerError::InvalidCommand),
+        (Command::GET, value) if value != 1 => return Err(ServerError::InvalidCommand),
+        (Command::DELETE, value) if value < 1 => return Err(ServerError::InvalidCommand),
+        (Command::LIST, value) if value != 0 => return Err(ServerError::InvalidCommand),
         _ => {},
     }
     
@@ -68,7 +73,7 @@ pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error:
     Ok(Request::new(command, arguments[1..].iter().map(|arg| arg.to_string()).collect()))
 }
 
-pub async fn read_buffer(stream: &mut TcpStream) -> Result<String, Box<dyn std::error::Error>>  {
+pub async fn read_buffer(stream: &mut TcpStream) -> Result<String, ServerError>  {
     let mut buf = [0u8; 1024];
     let n = stream.read(&mut buf).await?;
     let data = String::from_utf8_lossy(&buf[..n]);
@@ -85,18 +90,18 @@ impl Execution{
         }
     }
     
-    pub async fn execute(&mut self, request: Request) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    pub async fn execute(&mut self, request: Request) -> Result<Option<String>, ServerError> {
         match request.command {
             Command::SET => {
                 match self.cache.insert(request.arguments[0].clone(), request.arguments[1].clone()){
                     Some(value) => {
-                        println!("old value was replaced with: {}: {}", 
+                        println!("Old value was replaced with: {}: {}", 
                             request.arguments[0].clone(),
                             request.arguments[1].clone());
                         Ok(None)
                     }
                     None => {
-                        println!("new value was inserted");
+                        println!("New value was inserted");
                         Ok(None)
                     }
                 }
@@ -107,7 +112,7 @@ impl Execution{
                         Ok(Some(value.to_string()))
                     }
                     None => {
-                        println!("no value was found");
+                        println!("No value was found"); //make an error
                         Ok(None)
                     }
                 }
@@ -119,7 +124,7 @@ impl Execution{
                             println!("removed {}", value);
                         }
                         None => {
-                            println!("no value to remove");
+                            println!("no value to remove"); // make an eror
                         }
                     }
 
@@ -141,5 +146,27 @@ impl Execution{
 
 #[derive(Debug)]
 pub enum ServerError{
-
+    InvalidCommand,
+    IO(std::io::Error),
 }
+
+impl fmt::Display for ServerError{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self{
+            ServerError::InvalidCommand => {
+                write!(f, "Error: Invalid command")
+            },
+            ServerError::IO(e)=> {
+                write!(f, "{}", e)
+            },
+        } 
+    }
+}
+
+impl From<std::io::Error> for ServerError{
+    fn from(e: std::io::Error) -> ServerError {
+        ServerError::IO(e)
+    }
+}
+
+impl std::error::Error for ServerError {}
