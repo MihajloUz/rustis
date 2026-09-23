@@ -20,15 +20,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let request: Request = parse_request(buffer.as_str()).await?;
 
         match exec.execute(request).await {
-            Ok(Some(value)) => {
+            Ok(value) => {
                 stream.write_all(value.as_bytes()).await.unwrap(); // remake later 
-            },
-            Ok(None) => {
-
             },
             Err(_) => return Err("some error bruh".into()), 
         };
     }
-
     Ok(())
 }

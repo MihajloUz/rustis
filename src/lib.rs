@@ -12,9 +12,9 @@ use tokio::{
 pub enum Command{
     SET,
     GET,
-    DELETE,
+    DEL,
     COMMAND,
-    LIST, 
+    PING, 
 }
 
 #[derive(Debug)]
@@ -53,9 +53,9 @@ pub async fn parse_request(request: &str) -> Result<Request, ServerError> {
     let command: Option<Command> = match arguments[0]{
         "SET" => Some(Command::SET),
         "GET" => Some(Command::GET),
-        "DELETE" => Some(Command::DELETE),
+        "DEL" => Some(Command::DEL),
         "COMMAND" => Some(Command::COMMAND),
-        "LIST" => Some(Command::LIST),
+        "PING" => Some(Command::PING),
         _ => None,
     };
     
@@ -64,8 +64,8 @@ pub async fn parse_request(request: &str) -> Result<Request, ServerError> {
     match (&command, repetitions - 1) {
         (Command::SET, value) if value != 2 => return Err(ServerError::InvalidCommand),
         (Command::GET, value) if value != 1 => return Err(ServerError::InvalidCommand),
-        (Command::DELETE, value) if value < 1 => return Err(ServerError::InvalidCommand),
-        (Command::LIST, value) if value != 0 => return Err(ServerError::InvalidCommand),
+        (Command::DEL, value) if value < 1 => return Err(ServerError::InvalidCommand),
+        (Command::PING, value) if value != 0 => return Err(ServerError::InvalidCommand),
         _ => {},
     }
     
@@ -90,54 +90,53 @@ impl Execution{
         }
     }
     
-    pub async fn execute(&mut self, request: Request) -> Result<Option<String>, ServerError> {
+    pub async fn execute(&mut self, request: Request) -> Result<String, ServerError> {
         match request.command {
             Command::SET => {
                 match self.cache.insert(request.arguments[0].clone(), request.arguments[1].clone()){
                     Some(value) => {
-                        println!("Old value was replaced with: {}: {}", 
-                            request.arguments[0].clone(),
-                            request.arguments[1].clone());
-                        Ok(None)
+                        // replaced the old value
+                        return Ok("+OK\r\n".to_string());
                     }
                     None => {
-                        println!("New value was inserted");
-                        Ok(None)
+                        // new value was inserted
+                        return Ok("+OK\r\n".to_string());
                     }
                 }
             },
             Command::GET => {
                 match self.cache.get(&request.arguments[0].clone()){
                     Some(value) => {
-                        Ok(Some(value.to_string()))
+                        // hit 
+                        return Ok(format!("${}\r\n{}\r\n", value.chars().count(), value));
                     }
                     None => {
-                        println!("No value was found"); //make an error
-                        Ok(None)
+                        // miss
+                        return Ok("$-1\r\n".to_string());
                     }
                 }
             },
-            Command::DELETE => {
+            Command::DEL => {
                 for argument in request.arguments {
                     match self.cache.remove(&argument){
                         Some(value) => {
-                            println!("removed {}", value);
+                            // successfully removed the value
+                            return Ok(":1\r\n".to_string());
                         }
                         None => {
-                            println!("no value to remove"); // make an eror
+                            // no value to remove 
+                            return Ok(":0\r\n".to_string());
                         }
                     }
-
                 }
-                Ok(None)
+                Ok(String::new())
             },
             Command::COMMAND => {
-                println!("Received COMMAND: {:?}", request.arguments);
-                Ok(None)
+                return Ok("*0\r\n".to_string());
             }
-            Command::LIST => {
-                println!("CACHE: {:?}", self.cache);
-                Ok(None)
+            Command::PING => {
+                // reply with PONG
+                return Ok("+PONG\r\n".to_string());
             }
         } 
     }
