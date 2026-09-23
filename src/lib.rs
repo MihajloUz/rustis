@@ -12,6 +12,8 @@ pub enum Command{
     SET,
     GET,
     DELETE,
+    COMMAND,
+    LIST, 
 }
 
 #[derive(Debug)]
@@ -47,6 +49,8 @@ pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error:
         "SET" => Some(Command::SET),
         "GET" => Some(Command::GET),
         "DELETE" => Some(Command::DELETE),
+        "COMMAND" => Some(Command::COMMAND),
+        "LIST" => Some(Command::LIST),
         _ => None,
     };
     
@@ -56,6 +60,7 @@ pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error:
         (Command::SET, value) if value != 2 => return Err("invalid command".into()),
         (Command::GET, value) if value != 1 => return Err("invalid command".into()),
         (Command::DELETE, value) if value < 1 => return Err("invalid command".into()),
+        (Command::LIST, value) if value != 0 => return Err("invalid command".into()),
         _ => {},
     }
     
@@ -63,7 +68,7 @@ pub async fn parse_request(request: &str) -> Result<Request, Box<dyn std::error:
     Ok(Request::new(command, arguments[1..].iter().map(|arg| arg.to_string()).collect()))
 }
 
-pub async fn read_buffer(mut stream: TcpStream) -> Result<String, Box<dyn std::error::Error>>  {
+pub async fn read_buffer(stream: &mut TcpStream) -> Result<String, Box<dyn std::error::Error>>  {
     let mut buf = [0u8; 1024];
     let n = stream.read(&mut buf).await?;
     let data = String::from_utf8_lossy(&buf[..n]);
@@ -88,7 +93,6 @@ impl Execution{
                         println!("old value was replaced with: {}: {}", 
                             request.arguments[0].clone(),
                             request.arguments[1].clone());
-                        println!("{:?}", self.cache);
                         Ok(None)
                     }
                     None => {
@@ -122,9 +126,20 @@ impl Execution{
                 }
                 Ok(None)
             },
+            Command::COMMAND => {
+                println!("Received COMMAND: {:?}", request.arguments);
+                Ok(None)
+            }
+            Command::LIST => {
+                println!("CACHE: {:?}", self.cache);
+                Ok(None)
+            }
         } 
     }
 
 } 
 
+#[derive(Debug)]
+pub enum ServerError{
 
+}
